@@ -7,9 +7,12 @@ output:
     code_folding: hide
 runtime: shiny
 ---
-## Variant information for the provided VCF file
+## Variant Annotation of a provided VCF file
+
+This report is written in markdown because interactive HTML output is often more useful than static text for scientific reporting.  Although this example report is a bit lacking in practical applications, it is still relevant to be able to filter and sort the datatable output interactively.  Shiny could also do some more complex data filtering steps prior to the data table output if required.  
+
 ```{r Setup}
-knitr::opts_chunk$set(tidy=TRUE)
+knitr::opts_chunk$set(tidy=TRUE) # Must clean up some of my dirty code!
 ```
 ```{r PackageInstallation}
 # Package installation section: Install required packages
@@ -22,18 +25,20 @@ if(sum(!biocpackages%in%installed.packages())>0){
 if(sum(!cranpackages%in%installed.packages())>0){
   install.packages(cranpackages[!cranpackages%in%installed.packages()])
 }
-suppressPackageStartupMessages({  library("VariantAnnotation")
-  library("GenomicFeatures")
-  library("biomaRt")
-  library("data.table")
-  library("BSgenome.Hsapiens.UCSC.hg19")
-})
+suppressPackageStartupMessages({library("data.table")})
+
 ```
 Because these bioconductor packages most easily use the hg19 genome and this vcf was mapped to grch37, some genomic coordinates 
 do not match.  NA's in the table below show how many variants were unable to be located on the hg19 reference.
 ```{r DefineDataset}
 buildvcftable<-function(vcffile,genome){
-  if(is.null(vcffile)){return(0)}
+suppressPackageStartupMessages({  library("VariantAnnotation")
+  library("GenomicFeatures")
+  library("biomaRt")
+  library("BSgenome.Hsapiens.UCSC.hg19")
+})
+
+    if(is.null(vcffile)){return(0)}
   vcf<-readVcf(vcffile,genome = genome)
 # Consider speeding up the vcf read by using ScanVcfParam 
 # Although that may cause issues with predictCoding and locateVariants
@@ -75,7 +80,14 @@ outdf$TR <- unlist(lapply(outdf$TR, `[[`, 1)) # The TR field is a list of intege
 outdf$ReadPct <- round(outdf$TR/outdf$TC,digits = 3)*100
 # Also relevant information: Filter Status:
 Filter=mcols(vcf)["FILTER"]
-vcftable<-data.table(Variant=rownames(outdf),VarType=Variants$var,Depth=outdf$TC,SupportingReads=outdf$TR,PercentSupport=outdf$ReadPct,Filter=Filter$FILTER)
+cpr<-strsplit(rownames(outdf),":")
+ra<-strsplit(unlist(lapply(cpr,'[[',2)),"_")
+vcftable<-data.table(Chromosome=lapply(cpr,'[[',1),
+                     Position=unlist(lapply(strsplit(unlist(lapply(cpr,'[[',2)),"_"),'[[',1)),
+                     reference=unlist(lapply(strsplit(unlist(lapply(ra,'[[',2)),"/"),'[[',1)),
+                     alt=unlist(lapply(strsplit(unlist(lapply(ra,'[[',2)),split="/"),'[[',2)),
+                     VarType=Variants$var,Depth=outdf$TC,SupportingReads=outdf$TR,
+                     PercentSupport=outdf$ReadPct,Filter=Filter$FILTER)
 return(vcftable)
 }
 vcftable<-buildvcftable(vcffile="test_vcf_data.vcf",genome="hg19")
