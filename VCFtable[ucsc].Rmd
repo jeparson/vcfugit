@@ -78,7 +78,7 @@ Filter=mcols(vcf)["FILTER"]
 vcftable<-data.table(Variant=rownames(outdf),VarType=Variants$var,Depth=outdf$TC,SupportingReads=outdf$TR,PercentSupport=outdf$ReadPct,Filter=Filter$FILTER)
 return(vcftable)
 }
-vcftable<-buildvcftable(vcffile="~/Downloads/test_vcf_data.vcf",genome="hg19")
+vcftable<-buildvcftable(vcffile="test_vcf_data.vcf",genome="hg19")
 vcftable$VarType<-droplevels(vcftable$VarType)
 summary((vcftable$VarType)) 
 textInput('filename',label="filename to save to",value="test.csv")
