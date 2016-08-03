@@ -1,5 +1,5 @@
 ---
-title: "VCFTable"
+title: "VCFugit"
 author: "Jerod Parsons"
 date: "August 1, 2016"
 output: 
@@ -7,7 +7,7 @@ output:
     code_folding: hide
 runtime: shiny
 ---
-## Variant Annotation of a provided VCF file
+## Variant Annotation of a provided VCF file for Tempus (Code Demo)
 
 This report is written in markdown because interactive HTML output is often more useful than static text for scientific reporting.  Although this example report is a bit lacking in practical applications, it is still relevant to be able to filter and sort the datatable output interactively.  Shiny could also do some more complex data filtering steps prior to the data table output if required.  
 
@@ -107,3 +107,28 @@ observeEvent(input$go,
   write.csv(x = vcftable,file=input$filename,quote=FALSE,row.names = FALSE))
 renderDataTable(vcftable)
 ```
+## Output Description:  
+1. Chromosome - Number of the chromosome the variant is on.  
+2. Position - Genome coordinates of the variant  
+3. Reference - Sequence at this position in the reference  
+4. Alt - Sequence at this position in the variant.  
+5. VarType - Location and effect of variant  
+  + fiveUTR: 5' Untranslated region of a gene  
+  + threeUTR: 3' Untranslated region  
+  + intron: within an intron  
+  + promoter: within a promoter region  
+  + intergenic: not in or around a coding region  
+  + spliceSite: at a splice junction  
+  + synonymous: Coding variant with no effect on protein sequence  
+  + nonsynonymous: Coding variant with an effect on protein sequence  
+  + frameshift: Coding variant that causes a shift in protein reading frame  
+  + nonsense: Coding variant that introduces a new stop codon  
+6. Depth - Number of reads covering this position  
+7. SupportingReads - Number of reads at this position with this variant  
+8. PercentSupport - Proportion of reads that support this variant  
+9. Filter - Confidence measure of variant; do we have a reason to expect the sequence to be a bias?  
+  + Pass: This variant passes all filter criteria  
+  + AlleleBias: This variant is supported by an unexpected proportion of reads (expected: 50%, 100%)  
+  + HapScore: More than an expected number of haplotypes are called  
+  + SC: variant is in a low-complexity sequence  
+  + strandBias: Variant shows evidence of strand bias  
