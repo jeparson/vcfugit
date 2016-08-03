@@ -101,13 +101,14 @@ vcftable<-buildvcftable(vcffile=vcffile,genome="hg19")
 save(vcftable,file=gsub(vcffile,".vcf",".rData"))} # some rudimentary caching to keep this from running forever.
 if(file.exists(gsub(vcffile,".vcf",".rData"))){load(gsub(vcffile,".vcf",".rData"))}
 summary((vcftable$VarType))
-```
-```{R DisplayOutput}
-textInput('filename',label="filename to save to",value="test.csv")
-actionButton('go','Save!')
-observeEvent(input$go,
-  write.csv(x = vcftable,file=input$filename,quote=FALSE,row.names = FALSE))
 renderDataTable(vcftable)
+textInput('filename',label="filename to save output to",value="test.csv")
+actionButton('go','Save!')
+observeEvent(input$go,{
+  write.csv(x = lapply(vcftable,unlist),file=input$filename,quote=FALSE,row.names = FALSE)
+  cat("File Saved")
+})
+
 ```
 
 ## Output Description:  
