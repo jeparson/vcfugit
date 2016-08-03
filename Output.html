@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+
+<meta charset="utf-8">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="pandoc" />
+
+
+<meta name="author" content="Jerod Parsons" />
+
+
+<title>VCFugit</title>
+
+
+<style type="text/css">code{white-space: pre;}</style>
+<link rel="stylesheet"
+      href="file11c5d4a5c3224_files/highlight/default.css"
+      type="text/css" />
+<script src="file11c5d4a5c3224_files/highlight/highlight.js"></script>
+<style type="text/css">
+  pre:not([class]) {
+    background-color: white;
+  }
+</style>
+<script type="text/javascript">
+if (window.hljs && document.readyState && document.readyState === "complete") {
+   window.setTimeout(function() {
+      hljs.initHighlighting();
+   }, 0);
+}
+</script>
+
+
+
+<style type="text/css">
+h1 {
+  font-size: 34px;
+}
+h1.title {
+  font-size: 38px;
+}
+h2 {
+  font-size: 30px;
+}
+h3 {
+  font-size: 24px;
+}
+h4 {
+  font-size: 18px;
+}
+h5 {
+  font-size: 16px;
+}
+h6 {
+  font-size: 12px;
+}
+.table th:not([align]) {
+  text-align: left;
+}
+</style>
+
+
+</head>
+
+<body>
+
+<style type = "text/css">
+.main-container {
+  max-width: 940px;
+  margin-left: auto;
+  margin-right: auto;
+}
+code {
+  color: inherit;
+  background-color: rgba(0, 0, 0, 0.04);
+}
+img {
+  max-width:100%;
+  height: auto;
+}
+.tabbed-pane {
+  padding-top: 12px;
+}
+button.code-folding-btn:focus {
+  outline: none;
+}
+</style>
+
+
+<div class="container-fluid main-container">
+
+<!-- tabsets -->
+<script src="file11c5d4a5c3224_files/navigation-1.1/tabsets.js"></script>
+<script>
+$(document).ready(function () {
+  window.buildTabsets("TOC");
+});
+</script>
+
+<!-- code folding -->
+<script src="file11c5d4a5c3224_files/navigation-1.1/codefolding.js"></script>
+<script>
+$(document).ready(function () {
+  window.initializeCodeFolding("hide" === "show");
+});
+</script>
+
+
+
+
+
+
+<div class="fluid-row" id="header">
+
+<div class="btn-group pull-right">
+<button type="button" class="btn btn-default btn-xs dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><span>Code</span> <span class="caret"></span></button>
+<ul class="dropdown-menu" style="min-width: 50px;">
+<li><a id="rmd-show-all-code" href="#">Show All Code</a></li>
+<li><a id="rmd-hide-all-code" href="#">Hide All Code</a></li>
+</ul>
+</div>
+
+
+
+<h1 class="title toc-ignore">VCFugit</h1>
+<h4 class="author"><em>Jerod Parsons</em></h4>
+<h4 class="date"><em>August 1, 2016</em></h4>
+
+</div>
+
+
+<div id="variant-annotation-of-a-provided-vcf-file-for-tempus-code-demo" class="section level2">
+<h2>Variant Annotation of a provided VCF file for Tempus (Code Demo)</h2>
+<p>This report is written in markdown because interactive HTML output is often more useful than static text for scientific reporting. Although this example report is a bit lacking in practical applications, it is still relevant to be able to filter and sort the datatable output interactively. This application could also do some more complex and interactive data filtering steps prior to the data table output if required. To look at the code, you can simply click on the ‘code’ button to expand code chunks.</p>
+<pre class="r"><code>knitr::opts_chunk$set(tidy=TRUE) </code></pre>
+<pre class="r"><code># Package installation section: Install required packages
+biocpackages &lt;- c(&quot;VariantAnnotation&quot;, &quot;GenomicFeatures&quot;, &quot;biomaRt&quot;, &quot;BSgenome.Hsapiens.UCSC.hg19&quot;, 
+    &quot;TxDb.Hsapiens.UCSC.hg19.knownGene&quot;)
+cranpackages &lt;- c(&quot;data.table&quot;, &quot;shiny&quot;, &quot;gdata&quot;)
+if (sum(!biocpackages %in% installed.packages()) &gt; 0) {
+    source(&quot;https://bioconductor.org/biocLite.R&quot;)
+    biocLite(biocpackages[!biocpackages %in% installed.packages()])
+}
+if (sum(!cranpackages %in% installed.packages()) &gt; 0) {
+    install.packages(cranpackages[!cranpackages %in% installed.packages()], 
+        repos = &quot;http://cran.us.r-project.org&quot;)
+}</code></pre>
+<p>Because these bioconductor packages most easily use the hg19 genome and this vcf was mapped to GRCh37, some genomic coordinates do not match. NA’s in the table below show how many variants were unable to be located on the Hg19 reference.</p>
+<pre class="r"><code>buildvcftable &lt;- function(vcffile, genome) {
+    if (is.null(vcffile)) {
+        return(0)
+    }
+    
+    suppressPackageStartupMessages({
+        library(&quot;VariantAnnotation&quot;)
+        library(&quot;GenomicFeatures&quot;)
+        library(&quot;biomaRt&quot;)
+        library(&quot;BSgenome.Hsapiens.UCSC.hg19&quot;)
+        library(&quot;data.table&quot;)
+    })
+    
+    vcf &lt;- readVcf(vcffile, genome = genome)
+    # Consider speeding up the vcf read by using ScanVcfParam Although that may
+    # cause issues with predictCoding and locateVariants
+    switch(genome, hg19 = library(&quot;TxDb.Hsapiens.UCSC.hg19.knownGene&quot;), stop(&quot;Unsupported genome &quot;, 
+        genome))
+    # Currently only supporting HG19 because unfortunately that&#39;s what all of
+    # the TxDbs support.  It comes at the cost of interpretation of the
+    # mitochondria and other non-chromosomal sequences in grch37/38 data.
+    
+    # Determine Type of variation
+    seqlevelsStyle(vcf) &lt;- &quot;UCSC&quot;
+    all &lt;- suppressWarnings(suppressMessages(locateVariants(vcf, TxDb.Hsapiens.UCSC.hg19.knownGene, 
+        AllVariants())))  # Genomic location of variant
+    mcols(all)$LOCATION &lt;- gdata::reorder.factor(mcols(all)$LOCATION, new.order = c(&quot;intergenic&quot;, 
+        &quot;intron&quot;, &quot;threeUTR&quot;, &quot;fiveUTR&quot;, &quot;promoter&quot;, &quot;spliceSite&quot;, &quot;coding&quot;))
+    # Re-order the levels of the factor in order of least to most detrimental,
+    # so i can just use &#39;max&#39; to return the most deleterious
+    variants &lt;- split(mcols(all)$LOCATION, mcols(all)$QUERYID)
+    maxfactor &lt;- function(input) {
+        # Input: Factor of locations.  Factor must be ordered such that the last
+        # level is &#39;worst&#39; Return: The highest level present in the factor
+        levels(input)[max(as.numeric(input))]
+    }
+    varl &lt;- lapply(variants, maxfactor)  # A list of variants and the worst of locations
+    varl &lt;- data.frame(pos = names(varl), var = unlist(varl))
+    cdiff &lt;- predictCoding(vcf, TxDb.Hsapiens.UCSC.hg19.knownGene, Hsapiens)
+    # Predict nature of those various coding variants
+    conseq &lt;- split(mcols(cdiff)$CONSEQUENCE, mcols(cdiff)$QUERYID)
+    mcols(cdiff)$CONSEQUENCE &lt;- gdata::reorder.factor(mcols(cdiff)$CONSEQUENCE, 
+        new.order = c(&quot;frameshift&quot;, &quot;nonsense&quot;, &quot;nonsynomyous&quot;, &quot;synonymous&quot;))
+    conseql &lt;- lapply(conseq, maxfactor)
+    conseql &lt;- data.frame(pos = names(conseql), var = unlist(conseql))
+    # Now merge together the locations &amp; consequences
+    Variants &lt;- data.frame(pos = 1:length(vcf))
+    varl$var &lt;- factor(varl$var, levels = c(levels(varl$var), &quot;frameshift&quot;, 
+        &quot;nonsense&quot;, &quot;nonsynonymous&quot;, &quot;synonymous&quot;))  # Add the consequences into the same factor list
+    if (length(conseql$var) == sum(varl$var == &quot;coding&quot;)) 
+        {
+            varl$var[varl$var == &quot;coding&quot;] &lt;- conseql$var
+        }  # A quick test that nothing went wrong, and an overwrite of &#39;coding&#39; to its various subtypes
+    Variants &lt;- merge(Variants, varl, by = &quot;pos&quot;, all = &quot;TRUE&quot;)
+    # Depth of coverage @ position
+    outdf &lt;- data.frame(info(vcf)[c(&quot;TR&quot;, &quot;TC&quot;)])
+    # Number of reads supporting variant
+    outdf$TR &lt;- unlist(lapply(outdf$TR, `[[`, 1))  # The TR field is a list of integerlists,
+    # we just want the 1st element.  This causes technically incorrect results
+    # in 15/11765 test cases.
+    
+    # Percent of reads supporting variant
+    outdf$ReadPct &lt;- round(outdf$TR/outdf$TC, digits = 3) * 100
+    # Also relevant information: Filter Status:
+    Filter = mcols(vcf)[&quot;FILTER&quot;]
+    cpr &lt;- strsplit(rownames(outdf), &quot;:&quot;)
+    ra &lt;- strsplit(unlist(lapply(cpr, &quot;[[&quot;, 2)), &quot;_&quot;)
+    vcftable &lt;- data.table(Chromosome = lapply(cpr, &quot;[[&quot;, 1), Position = unlist(lapply(strsplit(unlist(lapply(cpr, 
+        &quot;[[&quot;, 2)), &quot;_&quot;), &quot;[[&quot;, 1)), reference = unlist(lapply(strsplit(unlist(lapply(ra, 
+        &quot;[[&quot;, 2)), &quot;/&quot;), &quot;[[&quot;, 1)), alt = unlist(lapply(strsplit(unlist(lapply(ra, 
+        &quot;[[&quot;, 2)), split = &quot;/&quot;), &quot;[[&quot;, 2)), VarType = Variants$var, Depth = outdf$TC, 
+        Supporting_Reads = outdf$TR, Percent_Support = outdf$ReadPct, Filter = Filter$FILTER)
+    return(vcftable)
+}
+vcffile &lt;- &quot;test_vcf_data.vcf&quot;
+if (!file.exists(gsub(vcffile, &quot;.vcf&quot;, &quot;.rData&quot;))) {
+    vcftable &lt;- buildvcftable(vcffile = vcffile, genome = &quot;hg19&quot;)
+    save(vcftable, file = gsub(vcffile, &quot;.vcf&quot;, &quot;.rData&quot;))
+}  # some rudimentary caching to keep this from running forever.
+if (file.exists(gsub(vcffile, &quot;.vcf&quot;, &quot;.rData&quot;))) {
+    load(gsub(vcffile, &quot;.vcf&quot;, &quot;.rData&quot;))
+}
+summary((vcftable$VarType))</code></pre>
+<pre><code>##       fiveUTR    intergenic        intron      promoter    spliceSite 
+##            71           822          4949           508            48 
+##      threeUTR    frameshift      nonsense nonsynonymous    synonymous 
+##           305            45            12          2584          2367 
+##          NA&#39;s 
+##            54</code></pre>
+<pre class="r"><code>renderDataTable(vcftable)</code></pre>
+<div id="outfff8555a1b33404c" class="shiny-datatable-output"></div>
+<pre class="r"><code>textInput(&quot;filename&quot;, label = &quot;filename to save output to&quot;, value = &quot;test.csv&quot;)</code></pre>
+<div class="form-group shiny-input-container">
+<label for="filename">filename to save output to</label>
+<input id="filename" type="text" class="form-control" value="test.csv"/>
+</div>
+<pre class="r"><code>actionButton(&quot;go&quot;, &quot;Save!&quot;)</code></pre>
+<button id="go" type="button" class="btn btn-default action-button">Save!</button>
+<pre class="r"><code>observeEvent(input$go, {
+    write.csv(x = lapply(vcftable, unlist), file = input$filename, quote = FALSE, 
+        row.names = FALSE)
+    cat(&quot;File Saved&quot;)
+})</code></pre>
+</div>
+<div id="output-description" class="section level2">
+<h2>Output Description:</h2>
+<ol style="list-style-type: decimal">
+<li>Chromosome - Number of the chromosome the variant is on.<br />
+</li>
+<li>Position - Genome coordinates of the variant<br />
+</li>
+<li>reference - Sequence at this position in the reference<br />
+</li>
+<li>alt - Sequence at this position in the variant.<br />
+</li>
+<li>VarType - Location and effect of variant<br />
+</li>
+</ol>
+<ul>
+<li>fiveUTR: 5’ Untranslated region of a gene<br />
+</li>
+<li>threeUTR: 3’ Untranslated region<br />
+</li>
+<li>intron: within an intron<br />
+</li>
+<li>promoter: within a promoter region<br />
+</li>
+<li>intergenic: not in or around a coding region<br />
+</li>
+<li>spliceSite: at a splice junction<br />
+</li>
+<li>synonymous: Coding variant with no effect on protein sequence<br />
+</li>
+<li>nonsynonymous: Coding variant with an effect on protein sequence<br />
+</li>
+<li>frameshift: Coding variant that causes a shift in protein reading frame<br />
+</li>
+<li>nonsense: Coding variant that introduces a new stop codon<br />
+</li>
+</ul>
+<ol start="6" style="list-style-type: decimal">
+<li>Depth - Number of reads covering this position<br />
+</li>
+<li>Supporting_Reads - Number of reads at this position with this variant<br />
+</li>
+<li>Percent_Support - Proportion of reads that support this variant<br />
+</li>
+<li>Filter - Confidence measure of variant; do we have a reason to expect the sequence to be a bias?<br />
+</li>
+</ol>
+<ul>
+<li>Pass: This variant passes all filter criteria<br />
+</li>
+<li>AlleleBias: This variant is supported by an unexpected proportion of reads (expected: 50%, 100%)<br />
+</li>
+<li>HapScore: More than an expected number of haplotypes are called<br />
+</li>
+<li>SC: variant is in a low-complexity sequence<br />
+</li>
+<li>strandBias: Variant shows evidence of strand bias</li>
+</ul>
+</div>
+
+
+
+
+</div>
+
+<script>
+
+// add bootstrap table styles to pandoc tables
+$(document).ready(function () {
+  $('tr.header').parent('thead').parent('table').addClass('table table-condensed');
+});
+
+</script>
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>
