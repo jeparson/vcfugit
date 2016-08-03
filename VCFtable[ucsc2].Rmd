@@ -12,33 +12,33 @@ runtime: shiny
 This report is written in markdown because interactive HTML output is often more useful than static text for scientific reporting.  Although this example report is a bit lacking in practical applications, it is still relevant to be able to filter and sort the datatable output interactively.  Shiny could also do some more complex data filtering steps prior to the data table output if required.  
 
 ```{r Setup}
-knitr::opts_chunk$set(tidy=TRUE) # Must clean up some of my dirty code!
+knitr::opts_chunk$set(tidy=TRUE) 
 ```
 ```{r PackageInstallation}
 # Package installation section: Install required packages
 biocpackages<-c("VariantAnnotation","GenomicFeatures","biomaRt",
                 "BSgenome.Hsapiens.UCSC.hg19","TxDb.Hsapiens.UCSC.hg19.knownGene")
-cranpackages<-c("data.table","shiny")
+cranpackages<-c("data.table","shiny","gdata")
 if(sum(!biocpackages%in%installed.packages())>0){
   source("https://bioconductor.org/biocLite.R")
   biocLite(biocpackages[!biocpackages%in%installed.packages()])}
 if(sum(!cranpackages%in%installed.packages())>0){
   install.packages(cranpackages[!cranpackages%in%installed.packages()])
 }
-suppressPackageStartupMessages({library("data.table")})
-
 ```
 Because these bioconductor packages most easily use the hg19 genome and this vcf was mapped to grch37, some genomic coordinates 
 do not match.  NA's in the table below show how many variants were unable to be located on the hg19 reference.
 ```{r DefineDataset}
 buildvcftable<-function(vcffile,genome){
+  if(is.null(vcffile)){return(0)}
+
 suppressPackageStartupMessages({  library("VariantAnnotation")
   library("GenomicFeatures")
   library("biomaRt")
   library("BSgenome.Hsapiens.UCSC.hg19")
+  library("data.table")
 })
 
-    if(is.null(vcffile)){return(0)}
   vcf<-readVcf(vcffile,genome = genome)
 # Consider speeding up the vcf read by using ScanVcfParam 
 # Although that may cause issues with predictCoding and locateVariants
@@ -51,23 +51,25 @@ suppressPackageStartupMessages({  library("VariantAnnotation")
 # Determine Type of variation 
   seqlevelsStyle(vcf)<-"UCSC"
   all <- suppressWarnings(suppressMessages(locateVariants(vcf, TxDb.Hsapiens.UCSC.hg19.knownGene, AllVariants()))) # Genomic location of variant
-  mcols(all)$LOCATION<-gdata::reorder.factor(mcols(all)$LOCATION,new.order=c("intergenic","intron","threeUTR","fiveUTR","promoter","spliceSite","coding")) # Re-order the levels of the factor in order of least to most detrimental, so i can just use 'max' to return the most deleterious
+  mcols(all)$LOCATION<-gdata::reorder.factor(mcols(all)$LOCATION,new.order=c("intergenic","intron","threeUTR","fiveUTR","promoter","spliceSite","coding")) 
+# Re-order the levels of the factor in order of least to most detrimental, so i can just use 'max' to return the most deleterious
   variants<-split(mcols(all)$LOCATION,mcols(all)$QUERYID)
   maxfactor<-function(input){
     # Input:  Factor of locations.  Factor must be ordered such that the last level is 'worst'
     # Return:  The highest level present in the factor
   levels(input)[max(as.numeric(input))]
 }
-varl <- lapply(variants,maxfactor) # Now a list of variants and the worst location
+varl <- lapply(variants,maxfactor) # A list of variants and the worst of locations
 varl <- data.frame(pos=names(varl),var=unlist(varl))
-cdiff <- predictCoding(vcf,TxDb.Hsapiens.UCSC.hg19.knownGene,Hsapiens) # Now to see how detrimental those various coding variants are
+cdiff <- predictCoding(vcf,TxDb.Hsapiens.UCSC.hg19.knownGene,Hsapiens) 
+# Predict nature of those various coding variants
 conseq <- split(mcols(cdiff)$CONSEQUENCE,mcols(cdiff)$QUERYID)
 mcols(cdiff)$CONSEQUENCE<-gdata::reorder.factor(mcols(cdiff)$CONSEQUENCE,new.order=c("frameshift","nonsense","nonsynomyous","synonymous"))
 conseql <- lapply(conseq,maxfactor)
 conseql <- data.frame(pos=names(conseql),var=unlist(conseql))
 # Now merge together the locations & consequences
 Variants <- data.frame(pos=1:length(vcf))
-varl$var <- factor(varl$var,levels=c(levels(varl$var),"frameshift","nonsense","nonsynonymous","synonymous")) #allow me to add the new consequences into the same factor list
+varl$var <- factor(varl$var,levels=c(levels(varl$var),"frameshift","nonsense","nonsynonymous","synonymous")) # Add the consequences into the same factor list
 if(length(conseql$var) == sum(varl$var=="coding")){
   varl$var[varl$var=="coding"]<-conseql$var
 }# A quick test that nothing went wrong, and an overwrite of "coding" to its various subtypes
@@ -75,7 +77,10 @@ Variants <- merge(Variants,varl,by="pos",all="TRUE")
 # Depth of coverage @ position
 outdf<-data.frame(info(vcf)[c("TR","TC")])
 # Number of reads supporting variant
-outdf$TR <- unlist(lapply(outdf$TR, `[[`, 1)) # The TR field is a list of integerlists, we just want the 1st element.  This causes technically incorrect results in 15/11765 test cases.
+outdf$TR <- unlist(lapply(outdf$TR, `[[`, 1)) # The TR field is a list of integerlists,
+# we just want the 1st element.  This causes technically incorrect results 
+# in 15/11765 test cases.
+
 # Percent of reads supporting variant
 outdf$ReadPct <- round(outdf$TR/outdf$TC,digits = 3)*100
 # Also relevant information: Filter Status:
@@ -90,15 +95,14 @@ vcftable<-data.table(Chromosome=lapply(cpr,'[[',1),
                      PercentSupport=outdf$ReadPct,Filter=Filter$FILTER)
 return(vcftable)
 }
-vcftable<-buildvcftable(vcffile="test_vcf_data.vcf",genome="hg19")
-vcftable$VarType<-droplevels(vcftable$VarType)
+vcffile<-"test_vcf_data.vcf"
+if(!file.exists(gsub(vcffile,".vcf",".rData"))){
+vcftable<-buildvcftable(vcffile=vcffile,genome="hg19")
+save(vcftable,file=gsub(vcffile,".vcf",".rData"))} # some rudimentary caching to keep this from running forever.
+if(file.exists(gsub(vcffile,".vcf",".rData"))){load(gsub(vcffile,".vcf",".rData"))}
 summary((vcftable$VarType)) 
 textInput('filename',label="filename to save to",value="test.csv")
 actionButton('go','Save!')
-output<-renderText(expr = function(){
-  input$go
-  return("File Saved")})
-textOutput("output")
 observeEvent(input$go,
   write.csv(x = vcftable,file=input$filename,quote=FALSE,row.names = FALSE))
 renderDataTable(vcftable)
