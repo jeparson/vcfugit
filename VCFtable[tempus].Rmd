@@ -23,7 +23,7 @@ if(sum(!biocpackages%in%installed.packages())>0){
   source("https://bioconductor.org/biocLite.R")
   biocLite(biocpackages[!biocpackages%in%installed.packages()])}
 if(sum(!cranpackages%in%installed.packages())>0){
-  install.packages(cranpackages[!cranpackages%in%installed.packages()])
+  install.packages(cranpackages[!cranpackages%in%installed.packages()],repos='http://cran.us.r-project.org')
 }
 ```
 Because these bioconductor packages most easily use the hg19 genome and this vcf was mapped to grch37, some genomic coordinates 
