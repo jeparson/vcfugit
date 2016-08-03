@@ -23,11 +23,11 @@ if(sum(!biocpackages%in%installed.packages())>0){
   source("https://bioconductor.org/biocLite.R")
   biocLite(biocpackages[!biocpackages%in%installed.packages()])}
 if(sum(!cranpackages%in%installed.packages())>0){
-  install.packages(cranpackages[!cranpackages%in%installed.packages()])
+  install.packages(cranpackages[!cranpackages%in%installed.packages()],repos='http://cran.us.r-project.org')
 }
 ```
-Because these bioconductor packages most easily use the hg19 genome and this vcf was mapped to grch37, some genomic coordinates 
-do not match.  NA's in the table below show how many variants were unable to be located on the hg19 reference.
+Because these bioconductor packages most easily use the hg19 genome and this vcf was mapped to GRCh37, some genomic coordinates 
+do not match.  NA's in the table below show how many variants were unable to be located on the Hg19 reference.
 ```{r DefineDataset}
 buildvcftable<-function(vcffile,genome){
   if(is.null(vcffile)){return(0)}
@@ -91,8 +91,8 @@ vcftable<-data.table(Chromosome=lapply(cpr,'[[',1),
                      Position=unlist(lapply(strsplit(unlist(lapply(cpr,'[[',2)),"_"),'[[',1)),
                      reference=unlist(lapply(strsplit(unlist(lapply(ra,'[[',2)),"/"),'[[',1)),
                      alt=unlist(lapply(strsplit(unlist(lapply(ra,'[[',2)),split="/"),'[[',2)),
-                     VarType=Variants$var,Depth=outdf$TC,SupportingReads=outdf$TR,
-                     PercentSupport=outdf$ReadPct,Filter=Filter$FILTER)
+                     VarType=Variants$var,Depth=outdf$TC,Supporting_Reads=outdf$TR,
+                     Percent_Support=outdf$ReadPct,Filter=Filter$FILTER)
 return(vcftable)
 }
 vcffile<-"test_vcf_data.vcf"
@@ -107,11 +107,12 @@ observeEvent(input$go,
   write.csv(x = vcftable,file=input$filename,quote=FALSE,row.names = FALSE))
 renderDataTable(vcftable)
 ```
+
 ## Output Description:  
 1. Chromosome - Number of the chromosome the variant is on.  
 2. Position - Genome coordinates of the variant  
-3. Reference - Sequence at this position in the reference  
-4. Alt - Sequence at this position in the variant.  
+3. reference - Sequence at this position in the reference  
+4. alt - Sequence at this position in the variant.  
 5. VarType - Location and effect of variant  
   + fiveUTR: 5' Untranslated region of a gene  
   + threeUTR: 3' Untranslated region  
@@ -124,8 +125,8 @@ renderDataTable(vcftable)
   + frameshift: Coding variant that causes a shift in protein reading frame  
   + nonsense: Coding variant that introduces a new stop codon  
 6. Depth - Number of reads covering this position  
-7. SupportingReads - Number of reads at this position with this variant  
-8. PercentSupport - Proportion of reads that support this variant  
+7. Supporting_Reads - Number of reads at this position with this variant  
+8. Percent_Support - Proportion of reads that support this variant  
 9. Filter - Confidence measure of variant; do we have a reason to expect the sequence to be a bias?  
   + Pass: This variant passes all filter criteria  
   + AlleleBias: This variant is supported by an unexpected proportion of reads (expected: 50%, 100%)  
